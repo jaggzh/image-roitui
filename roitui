@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+# Copyright jaggz.h { who may be contacted at } gmail
+# https://github.com/jaggzh/image-roitui
+# Usage LICENSE in repo (BSD-3)
+
+# Allow user selection of Region Of Interest (ROI) / Bounding Box in text mode.
+# Uses "chafa" for image display if user chooses an image.
+# (24-bit RGB / full color)
+
+# Notes:
+#   * chafa compatibility:
+#     The normal text cursor is often is not very clear over many images' RGB colors;
+#     so, to make a visible cursor I had to draw a char myself.
+#     To do this I also had to replace that char+color when the cursor was moved, so
+#     this fully parses chafa's output. If chafa ends up, in the future, doing something
+#     different with its 24-bit color display, this might break.
+#   * Keys:
+#     I currently don't handle arrow keys and such, so you're stuck with vi-like hjkl for now.
+#     See -h's keys list.
+# Limitations:
+#   I currently don't handle aspect ratio.
+#    (It'll scale to the term width/height even if it's stretching out the image.)
+# Dependencies:
+#   ffmpeg, sox, and chafa
+# Installation:
+#   Clone repo or just get roitui (and the license!??) and symlink or copy roitui wherever
+#    you want to run it from.  I clone the repo and symlink it into my bin/ dir.
+
+import sys
+import os
+import termios
+import tty
+import argparse
+import re
+import subprocess
+from PIL import Image
+import time
+import math
+
+# Helper function to print to stderr with flush=True and end=''
+def pef(*args, **kwargs):
+    print(*args, file=sys.stderr, flush=True, end='', **kwargs)
+
+def move_cursor(row, col):
+    pef(f"\033[{row};{col}H")
+
+def set_marker():
+    pef("\033[37;41;1m▣\033[0m")  # White on red filled square
+
+def clear_screen():
+    pef("\033[2J")
+
+def get_term_size():
+    try:
+        # Try to get terminal size using os.get_terminal_size()
+        size = os.get_terminal_size()
+        return size.lines, size.columns
+    except OSError:
+        pass  # If it fails, move to next method.
+
+    try:
+        # Try to get terminal size using `stty size`
+        result = subprocess.run(['stty', 'size'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0:
+            lines, columns = map(int, result.stdout.split())
+            return lines, columns
+    except Exception:
+        pass  # Ignore errors and move to the next method.
+
+    try:
+        # Try to get terminal size from environment variables
+        lines = int(os.environ.get('LINES'))
+        columns = int(os.environ.get('COLUMNS'))
+        return lines, columns
+    except (TypeError, ValueError):
+        pass  # If env variables are not set, move to the error.
+
+    # If all methods fail, print error and exit
+    pef("There was an error getting the term size. We tried a few methods and all failed.\n")
+    pef("You might need to manually specify rows/cols with -r -c (see -h). Aborting.\n")
+    exit(1)
+
+def enter_raw_mode():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
+    return old_settings
+
+def exit_raw_mode(old_settings):
+    fd = sys.stdin.fileno()
+    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+def clr24(fr,fg,fb,br,bg,bb):
+    return f'\033[38;2;{fr};{fg};{fb};48;2;{br};{bg};{bb}m'
+
+def go_show_info(y, x, term_cols, term_rows):
+    move_cursor(term_rows, 1)
+    pef(clr24(140,140,140,0,0,0))
+    pef(f'xy:{x},{y}')
+
+def handle_input(start_x, start_y, term_cols, term_rows, ansi_data, info):
+    x, y = start_x, start_y
+    start_point = None
+    end_point = None
+    old_x, old_y = x, y  # Track old cursor position
+
+    old_settings = enter_raw_mode()
+    try:
+        # Place initial cursor
+        place_cursor(x, y, ansi_data)
+        while True:
+            if info:
+                go_show_info(y, x, term_cols, term_rows)
+
+            move_cursor(y, x)
+            ch = sys.stdin.read(1)
+            
+            if ch == 'q' or ch == '\033':  # Quit
+                break
+            elif ch == '0':  # home
+                x = 1; y = 1
+            elif ch == '^':  # Start of line
+                x = 1;
+            elif ch == '$':  # End of line
+                x = term_cols;
+            elif ch == 'G':  # Last line
+                x = term_cols; y = term_rows
+            elif ch == 'h':  # Move left
+                x = max(1, x - 1)
+            elif ch == 'j':  # Move down
+                y = min(term_rows, y + 1)
+            elif ch == 'k':  # Move up
+                y = max(1, y - 1)
+            elif ch == 'l':  # Move right
+                x = min(term_cols, x + 1)
+            elif ch in (' ', '\n'):  # Mark point
+                if start_point is None:
+                    start_point = (x, y)
+                    if len(ansi_data): # No markers no image data to recover what lies beneath
+                        set_marker()
+                else:
+                    end_point = (x, y)
+                    if len(ansi_data): # No markers no image data to recover what lies beneath
+                        set_marker()
+                    break
+            
+            if old_x != x or old_y != y:
+                if start_point is not None \
+                        and (old_x,old_y) == start_point:
+                    move_cursor(old_y, old_x)
+                    if len(ansi_data): # No markers no image data to recover what lies beneath
+                        set_marker()
+                else:
+                    restore_ansi_char(old_x, old_y, ansi_data)  # Restore previous char
+                    place_cursor(x, y, ansi_data)  # Place new cursor
+                old_x, old_y = x, y  # Update old cursor position
+
+    finally:
+        exit_raw_mode(old_settings)
+        # clear_screen()
+        if start_point and end_point:
+            return start_point, end_point
+        return None, None
+
+def place_cursor(x, y, ansi_data):
+    """Move cursor to (x, y) and place the custom cursor symbol."""
+    move_cursor(y, x)
+    if len(ansi_data): # No markers if we don't have image data to correct it
+        set_marker()
+
+def restore_ansi_char(x, y, ansi_data):
+    """Restore the original character and ANSI colors at position (x, y)."""
+    if (x, y) in ansi_data:
+        move_cursor(y, x)
+        original_ansi, original_char = ansi_data[(x, y)]
+        pef(f"{original_ansi}{original_char}\033[0m")  # Restore the original ANSI color and character
+
+def parse_ansi_output(ansi_output):
+    """Parse ANSI output and return a dictionary with ANSI data for each position, ensuring full fg+bg colors."""
+    ansi_data = {}
+    current_fg = None
+    current_bg = None
+
+    # Regex to match ANSI escape sequences followed by multiple characters (if any)
+    ansi_escape = re.compile(r'(\033\[[0-9;]*m)([^\033]+)')
+
+    # Regex to capture foreground (38;2) and background (48;2) colors
+    fg_regex = re.compile(r'38;2;(\d+);(\d+);(\d+)')
+    bg_regex = re.compile(r'48;2;(\d+);(\d+);(\d+)')
+
+    # Remove any leading reset sequence from chafa
+    ansi_output = ansi_output.removeprefix('\033[0m')  # Strip chafa's initial reset code
+
+    lines = ansi_output.splitlines()
+    for y, line in enumerate(lines, start=1):
+        pos = 1
+        for match in ansi_escape.finditer(line):
+            ansi_sequence, chars = match.groups()  # `chars` may be more than one character
+
+            # Check if this sequence includes foreground and/or background colors
+            fg_match = fg_regex.search(ansi_sequence)
+            bg_match = bg_regex.search(ansi_sequence)
+
+            # Update the current fg and bg colors if present
+            if fg_match:
+                current_fg = f'38;2;{fg_match.group(1)};{fg_match.group(2)};{fg_match.group(3)}'
+            if bg_match:
+                current_bg = f'48;2;{bg_match.group(1)};{bg_match.group(2)};{bg_match.group(3)}'
+
+            # Build the full ANSI sequence including fg and bg
+            full_ansi = "\033["
+
+            if current_fg:
+                full_ansi += f"{current_fg};"
+            if current_bg:
+                full_ansi += f"{current_bg};"
+
+            # Remove trailing semicolon and complete the ANSI sequence
+            full_ansi = full_ansi.rstrip(';') + 'm'
+
+            # Loop through each character and assign the same full ANSI sequence
+            for char in chars:
+                ansi_data[(pos, y)] = (full_ansi, char)
+                pos += 1
+
+    return ansi_data
+
+def get_ansi_image_from_chafa(img_path, term_cols, term_rows):
+    """Run chafa with ANSI art and return the ANSI output."""
+    cmd = ['chafa',
+           '-s', f'{term_cols}x{term_rows}',
+           '--colors', 'full',
+           '-f', 'symbols',
+           '--stretch', img_path]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE)
+    
+    return result.stdout.decode('utf-8')
+
+def get_image_dimensions(img_path):
+    with Image.open(img_path) as img:
+        return img.width, img.height
+
+def print_ansi_img(ansi): # Removes last char if needed to prevent screen scroll
+    ansi = re.sub(r'.\033\[0m\s*$', '\033[0m', ansi)
+    pef(ansi)
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Text-based Region Of Interest (ROI) selector",
+        prog='roitui',
+        epilog='''Keys:
+    q/esc  - Quit
+    0      - Top left
+    ^      - Start of line
+    $      - End of line
+    G      - Bottom right corner
+    hjkl   - Left, Right, Up, Down
+    Space or enter mark the start and end coordinates of the selection box.
+
+    (We do not currently support arrow keys and such, only hjkl)
+
+    We exit immediately upon the 2nd point selected, printing:
+    {width}x{height}+{coord_x}+{coord_y} to stdout
+    The upper-left corner is referenced from 0,0 at the top left.
+    The bottom-right corner is referenced from the terminal or image width.
+    (ie. You will not be able to select a zero-width / zero-height area.)
+
+    Example outputs:
+      1. User selects a box starting at the top left corner:
+           123x159+0+0
+      2. User selects a box at the bottom right corner, with the same
+         start/stop cursor location. (Note that 2579+13 is 2592 == the image width)
+           13x40+2579+1904
+''',
+        formatter_class=argparse.RawTextHelpFormatter  # Use RawTextHelpFormatter to preserve newlines
+    )
+    parser.add_argument("-c", "--term_cols", type=int, help="Override terminal width")
+    parser.add_argument("-r", "--term_rows", type=int, help="Override terminal height")
+    parser.add_argument("-x", "--start_col", type=float, default=0.5, help="Starting cursor column (default: 0.5)")
+    parser.add_argument("-y", "--start_row", type=float, default=0.5, help="Starting cursor row (default: 0.5)")
+    parser.add_argument("--rx", "--ref_width", type=float, help="Reference width for scaling")
+    parser.add_argument("--ry", "--ref_height", type=float, help="Reference height for scaling")
+    parser.add_argument("--ref_img", "--rimg", type=str, help="Image file to get dimensions")
+    parser.add_argument("-i", "--img", type=str, help="Image file to get dimensions AND display with chafa")
+    parser.add_argument("--info", action='store_true', help="Display on-screen info (like cur row/col)")
+    parser.add_argument("-d", "--delim", type=str, help="Delimiter (instead of WxH+X+Y)")
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase output verbosity")
+    parser.add_argument("-t", "--timeout", action='store_true', help="ixit after delay")
+    
+    args = parser.parse_args()
+    # if (args.term_cols or args.term_rows) and not (args.term_cols and args.term_rows):
+    #     pef("If specifying one of -c or -r you must specify both")
+    #     sys.exit(1)
+
+    if (args.term_cols and args.term_rows):
+        term_cols = args.term_cols
+        term_rows = args.term_rows
+    else:
+        trows,tcols = get_term_size()
+        term_cols = args.term_cols or tcols
+        term_rows = args.term_rows or trows
+
+    # Determine image dimensions
+    if args.img:
+        img_width, img_height = get_image_dimensions(args.img)
+        ansi_output = get_ansi_image_from_chafa(args.img, term_cols, term_rows)
+        print_ansi_img(ansi_output)
+        ansi_data = parse_ansi_output(ansi_output)
+    elif args.ref_img:
+        img_width, img_height = get_image_dimensions(args.ref_img)
+        ansi_data = {}  # No image, so no ANSI data
+    else:
+        img_width, img_height = term_cols, term_rows  # Fallback if no image is provided
+        ansi_data = {}  # No image, so no ANSI data
+
+    # Handle the starting positions
+    start_x = max(1, int(args.start_col * term_cols) if isinstance(args.start_col, float) else min(args.start_col, term_cols))
+    start_y = max(1, int(args.start_row * term_rows) if isinstance(args.start_row, float) else min(args.start_row, term_rows))
+
+    # Get start and end points from user input
+    start_point, end_point = handle_input(start_x, start_y, term_cols, term_rows, ansi_data, args.info)
+
+    # After the user has selected the ROI
+    move_cursor(term_rows, 1)
+    if start_point and end_point:
+        x1, y1 = start_point
+        x2, y2 = end_point
+
+        # Ensure (x1, y1) is top-left and (x2, y2) is bottom-right
+        x1, x2 = min(x1, x2), max(x1, x2)
+        y1, y2 = min(y1, y2), max(y1, y2)
+
+        # Adjust x2 and y2 to include the last character selected
+        # Since terminal positions start from 1, we need to ensure we capture the full area
+        char_width = x2 - x1 + 1
+        char_height = y2 - y1 + 1
+
+        # Calculate the pixel coordinates, ensuring accurate mapping
+        x_img1 = math.floor((x1 - 1) * img_width / term_cols)
+        x_img2 = math.ceil(x2 * img_width / term_cols)
+        y_img1 = math.floor((y1 - 1) * img_height / term_rows)
+        y_img2 = math.ceil(y2 * img_height / term_rows)
+
+        # Ensure the coordinates do not exceed image dimensions
+        x_img1 = max(0, min(x_img1, img_width - 1))
+        x_img2 = max(0, min(x_img2, img_width))
+        y_img1 = max(0, min(y_img1, img_height - 1))
+        y_img2 = max(0, min(y_img2, img_height))
+
+        # Calculate image ROI width and height
+        iwidth = x_img2 - x_img1
+        iheight = y_img2 - y_img1
+
+        delim_size=args.delim or 'x'
+        delim_pos=args.delim or '+'
+
+        # Print the terminal and image ROI information
+        if args.verbose > 0:
+            print(f"\nTerminal size: {term_cols}x{term_rows}")
+            print(f"Image size: {img_width}x{img_height}")
+            print(f"Terminal ROI: {char_width}x{char_height} at {x1},{y1}")
+            print(f"Image ROI: {iwidth}x{iheight} at {x_img1},{y_img1}")
+        else:
+            print(f"{iwidth}{delim_size}{iheight}{delim_pos}{x_img1}{delim_pos}{y_img1}")
+
+if __name__ == "__main__":
+    main()
+
+# vim: et
