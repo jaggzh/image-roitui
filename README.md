@@ -32,6 +32,33 @@ manipulations without a GUI.
 - Uses **chafa** for rendering images in text, which supports full-color 24-bit RGB.
 - Keyboard commands are inspired by `vi`, using `hjkl` for movement.
 
+### Output from -h / --help
+```
+Keys:
+    q/esc  - Quit
+    0      - Top left
+    ^      - Start of line
+    $      - End of line
+    G      - Bottom right corner
+    hjkl   - Left, Right, Up, Down
+    Space or enter mark the start and end coordinates of the selection box.
+
+    (We do not currently support arrow keys and such, only hjkl)
+
+    We exit immediately upon the 2nd point selected, printing:
+    {width}x{height}+{coord_x}+{coord_y} to stdout
+    The upper-left corner is referenced from 0,0 at the top left.
+    The bottom-right corner is referenced from the terminal or image width.
+    (ie. You will not be able to select a zero-width / zero-height area.)
+
+    Example outputs:
+      1. User selects a box starting at the top left corner:
+           123x159+0+0
+      2. User selects a box at the bottom right corner, with the same
+         start/stop cursor location. (Note that 2579+13 is 2592 == the image width)
+           13x40+2579+1904
+```
+
 ### Limitations
 - Currently does not support handling of aspect ratio, meaning images will scale to terminal width/height, even if that leads to stretching.
 - Does not support arrow keys for navigation; instead, uses `hjkl` keys.
