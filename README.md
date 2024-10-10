@@ -14,6 +14,11 @@ display, allowing for 24-bit RGB / full-color text-based manipulation.
 
 *****It does NOT use sixels or anything. It's actual text (but is using chafa's 'symbols' / UTF8 support for higher "resolution" simulation.)**
 
+After selection, it prints, to stdout, the `XxY+W+H` (eg. `300x210+50+5`), which may be captured like:
+```bash
+coords=$(roitui -i screenshots/dog.jpg)
+```
+
 The tool features a text UI where users can select regions using keyboard
 commands, similar to `vi` (`hjkl` keys for movement). This tool is especially
 useful for those who prefer working in a terminal environment or need quick
