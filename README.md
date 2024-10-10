@@ -8,9 +8,16 @@
 
 ### Overview
 
-**image-roitui** is a text-based tool for selecting a Region Of Interest (ROI) or a bounding box in an image using the terminal. It uses **chafa** for image display, allowing for 24-bit RGB / full-color text-based manipulation.
+**image-roitui** is a text-based tool for selecting a Region Of Interest (ROI)
+or a bounding box in an image using the terminal. It uses **chafa** for image
+display, allowing for 24-bit RGB / full-color text-based manipulation.
 
-The tool features a text UI where users can select regions using keyboard commands, similar to `vi` (`hjkl` keys for movement). This tool is especially useful for those who prefer working in a terminal environment or need quick manipulations without a GUI.
+*****It does NOT use sixels or anything. It's actual text (but is using chafa's 'symbols' / UTF8 support for higher "resolution" simulation.)**
+
+The tool features a text UI where users can select regions using keyboard
+commands, similar to `vi` (`hjkl` keys for movement). This tool is especially
+useful for those who prefer working in a terminal environment or need quick
+manipulations without a GUI.
 
 ### Screenshots
 ![Selection ROI of dog image](screenshots/dog.png)
@@ -87,9 +94,15 @@ difficult to see).
 Use `-h` to display the help menu with available options and key bindings.
 
 ### Notes
-- **Chafa Compatibility**: The text cursor is often not clear over many images' RGB colors, so the tool draws a custom character to indicate the cursor's position. It replaces that character with the correct color when the cursor moves, which requires parsing **chafa**'s output. If **chafa** changes its behavior for 24-bit color display in the future, this functionality may break.
+- **Chafa Compatibility**: The text cursor is often not clear over many images'
+  RGB colors, so the tool draws a custom character to indicate the cursor's
+  position. It replaces that character with the correct color when the cursor
+  moves, which requires parsing **chafa**'s output. If **chafa** changes its
+  behavior for 24-bit color display in the future, this functionality may
+  break.
 
-- **Keys**: Currently, **image-roitui** does not support arrow keys. You need to use `vi`-like keys (`h`, `j`, `k`, `l`) for navigation.
+- **Keys**: Currently, **image-roitui** does not support arrow keys. You need
+  to use `vi`-like keys (`h`, `j`, `k`, `l`) for navigation.
 
 ### License
 
