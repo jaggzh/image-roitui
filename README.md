@@ -75,38 +75,38 @@ To install **image-roitui**, follow these steps:
 
 1. **Clone the repository**:
    
-```
-   bash
-   git clone https://github.com/jaggzh/image-roitui.git
-```
+    ```
+    bash
+    git clone https://github.com/jaggzh/image-roitui.git
+    ```
 
 2. **Install dependencies**:
    Make sure you have the required dependencies installed on your system:
    
    - On **Debian-based systems** (e.g., Ubuntu):
-```bash
-sudo apt update
-sudo apt install ffmpeg sox chafa
-```
+    ```bash
+    sudo apt update
+    sudo apt install ffmpeg sox chafa
+    ```
    
    - On **Fedora**:
-     \```bash
+     ```bash
      sudo dnf install ffmpeg sox chafa
-     \```
+     ```
    
    - On **macOS** (using Homebrew):
-     \```bash
+     ```bash
      brew install ffmpeg sox chafa
-     \```
+     ```
 
 3. **Symlink or Copy the Script**:
    
    You can create a symlink to easily run the script from anywhere. This can be done by linking it to a directory in your `$PATH` (like `~/bin/`):
    
-   \```bash
+   ```bash
    cd ~/bin/  # Or your favorite directory in your PATH
    ln -s ~/path/to/image-roitui/roitui .
-   \```
+   ```
    Alternatively, you can copy the script to a directory in your `$PATH`.
 
 ### Usage
