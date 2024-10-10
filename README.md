@@ -25,7 +25,9 @@ useful for those who prefer working in a terminal environment or need quick
 manipulations without a GUI.
 
 ### Screenshots
+![Usage Command](screenshots/cmd-01.png)
 ![Selection ROI of dog image](screenshots/dog.png)
+![Showing results with echo](screenshots/cmd-02.png)
 
 ### Features
 - Allows user selection of ROI/bounding box in a terminal.
