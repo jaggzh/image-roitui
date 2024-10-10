@@ -117,6 +117,11 @@ To run **image-roitui**, simply execute:
 roitui -i image.jpg [other options]
 ```
 
+But you most-likely want to capture the coordinates it outputs:
+```bash
+coords=$(roitui -i screenshots/dog.jpg)
+```
+
 If you already have something on the screen, roitui can be used without
 drawing an image. You can give it a reference image for scale if you like
 (without it displaying it).  Without a -i image, however, it will not
