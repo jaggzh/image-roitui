@@ -75,18 +75,19 @@ To install **image-roitui**, follow these steps:
 
 1. **Clone the repository**:
    
-   \```bash
+```
+   bash
    git clone https://github.com/jaggzh/image-roitui.git
-   \```
+```
 
 2. **Install dependencies**:
    Make sure you have the required dependencies installed on your system:
    
    - On **Debian-based systems** (e.g., Ubuntu):
-     \```bash
-     sudo apt update
-     sudo apt install ffmpeg sox chafa
-     \```
+```bash
+sudo apt update
+sudo apt install ffmpeg sox chafa
+```
    
    - On **Fedora**:
      \```bash
