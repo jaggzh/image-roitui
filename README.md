@@ -12,6 +12,9 @@
 
 The tool features a text UI where users can select regions using keyboard commands, similar to `vi` (`hjkl` keys for movement). This tool is especially useful for those who prefer working in a terminal environment or need quick manipulations without a GUI.
 
+### Screenshots
+![Selection ROI of dog image](screenshots/dog.png)
+
 ### Features
 - Allows user selection of ROI/bounding box in a terminal.
 - Uses **chafa** for rendering images in text, which supports full-color 24-bit RGB.
