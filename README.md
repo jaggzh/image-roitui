@@ -84,10 +84,10 @@ To install **image-roitui**, follow these steps:
    Make sure you have the required dependencies installed on your system:
    
    - On **Debian-based systems** (e.g., Ubuntu):
-    ```bash
-    sudo apt update
-    sudo apt install ffmpeg sox chafa
-    ```
+     ```bash
+     sudo apt update
+     sudo apt install ffmpeg sox chafa
+     ```
    
    - On **Fedora**:
      ```bash
